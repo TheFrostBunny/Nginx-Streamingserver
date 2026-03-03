@@ -38,13 +38,15 @@
                     align-items: stretch;
                     margin-top: 18px;
                     width: 100vw;
-                    max-width: 100vw;
+                    max-width: 1400px;
                     min-height: 80vh;
                     background: #15181d;
                     border-radius: 18px;
                     box-shadow: 0 6px 32px #0008;
                     border: 2.5px solid #2e8bff55;
                     overflow: hidden;
+                    margin-left: auto;
+                    margin-right: auto;
                 }
                 .stream-video {
                     flex: 2 1 0;
@@ -58,16 +60,18 @@
                 }
                 .video-js {
                     width: 100%;
-                    height: 100vh;
-                    min-height: 400px;
+                    aspect-ratio: 16/9;
+                    min-height: 240px;
+                    max-height: 700px;
                     background: #222;
                     border-radius: 0;
                     box-shadow: 0 2px 16px #0006;
                     border-bottom: 2px solid #232a34;
+                    object-fit: contain;
                 }
                 .stream-chat {
                     flex: 1 1 420px;
-                    min-width: 340px;
+                    min-width: 280px;
                     max-width: 600px;
                     background: #232a34;
                     display: flex;
@@ -106,10 +110,15 @@
                 .chatbox input { flex: 1; }
                 .chatbox button { background: #2e8bff; color: #fff; border: none; cursor: pointer; }
                 .chatbox button:hover { background: #1760b0; }
-                @media (max-width: 1100px) {
+                @media (max-width: 1200px) {
                     .stream-flex { flex-direction: column; gap: 0; }
                     .stream-chat { max-width: 100vw; min-width: 0; margin-top: 24px; }
-                    .video-js { height: 320px; min-height: 180px; border-radius: 12px; }
+                    .video-js { max-height: 320px; min-height: 160px; border-radius: 12px; }
+                }
+                @media (max-width: 700px) {
+                    .stream-title { font-size: 1.2em; }
+                    .chatbox { padding: 8px 2px 8px 2px; }
+                    .chat-messages { font-size: 0.95em; }
                 }
             
         
