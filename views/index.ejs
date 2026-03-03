@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Dashboard</title>
+    
+    <!-- CSS - Hentes nå fra din egen server -->
+    <link href="/vjs/video-js.min.css" rel="stylesheet" />
+    
+    <!-- JS - Hentes nå fra din egen server -->
+    <script src="/vjs/video.min.js"></script>
+
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: #181c20; border-radius: 8px; padding: 10px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>🔴 Aktive Strømmer</h1>
+    <div id="stream-grid" class="grid"></div>
+
+    <script>
+        let activeStreams = [];
+
+        async function update() {
+            try {
+                const res = await fetch('/api/streams');
+                const streams = await res.json();
+                
+                if (JSON.stringify(streams) !== JSON.stringify(activeStreams)) {
+                    const grid = document.getElementById('stream-grid');
+                    grid.innerHTML = '';
+                    
+                    streams.forEach(id => {
+                        const div = document.createElement('div');
+                        div.className = 'card';
+                        div.innerHTML = `
+                            <video id="v-${id}" class="video-js vjs-16-9 vjs-default-skin" controls muted autoplay></video>
+                            <p>Stream: ${id}</p>
+                        `;
+                        grid.appendChild(div);
+
+                        // Sjekk om videojs er lastet før vi bruker det
+                        if (typeof videojs !== 'undefined') {
+                            videojs(`v-${id}`).src({ 
+                                type: 'application/x-mpegURL', 
+                                src: `/hls/${id}.m3u8` 
+                            });
+                        }
+                    });
+                    activeStreams = streams;
+                }
+            } catch (e) {
+                console.error("Feil ved oppdatering:", e);
+            }
+        }
+
+        // Kjør oppdatering hvert 5. sekund
+        setInterval(update, 5000);
+        update();
+    </script>
+</body>
+</html>

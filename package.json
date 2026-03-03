@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "video.js": "^8.23.7",
+    "ytdl-core": "^4.11.5"
+  }
+}
