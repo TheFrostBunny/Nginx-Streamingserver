@@ -18,8 +18,8 @@ app.set('view engine', 'ejs');
 // Server Video.js fra node_modules
 app.use('/vjs', express.static(path.join(__dirname, 'node_modules/video.js/dist')));
 
-// Server HLS-strømmer direkte
-app.use('/hls', express.static(HLS_PATH));
+// Server HLS-strømmer direkte en fra HLS_PATH
+app.use('/hls', express.static(HLS_PATH)); 
 
 // API: Liste over aktive strømmer
 app.get('/api/streams', (req, res) => {
