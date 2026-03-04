@@ -5,22 +5,78 @@ const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
 
+app.get('/upload', (req, res) => {
+    res.render('upload');
+});
+
+app.get('/video/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const videoPath = path.join(__dirname, 'public', 'uploads', filename);
+    // Sjekk at filen finnes
+    fs.access(videoPath, fs.constants.F_OK, err => {
+        if (err) {
+            return res.status(404).send('Video ikke funnet');
+        }
+        res.render('video', {
+            videoUrl: `/uploads/${filename}`,
+            videoName: filename
+        });
+    });
+});
+
+app.get('/videos', (req, res) => {
+    const uploadsPath = path.join(__dirname, 'public', 'uploads');
+    fs.readdir(uploadsPath, (err, files) => {
+        if (err) {
+            console.error('Feil ved lesing av uploads-mappe:', err);
+            return res.render('videolist', { videos: [] });
+        }
+        const videos = files.filter(f => !f.startsWith('.'));
+        res.render('videolist', { videos });
+    });
+});
+
+
+app.get('/api/videos', (req, res) => {
+    const uploadsPath = path.join(__dirname, 'public', 'uploads');
+    fs.readdir(uploadsPath, (err, files) => {
+        if (err) {
+            console.error('Feil ved lesing av uploads-mappe:', err);
+            return res.status(500).json([]);
+        }
+        const videos = files.filter(f => !f.startsWith('.'));
+        res.json(videos);
+    });
+});
+
+const multer = require('multer');
+const upload = multer({
+    dest: path.join(__dirname, 'public', 'uploads'),
+    limits: { fileSize: 200 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype && file.mimetype.startsWith('video/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Kun video-filer er tillatt!'), false);
+        }
+    }
+});
+
 const HLS_PATH = '/var/www/html/stream/hls';
 
-// Middleware
 app.use(morgan('dev'));
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public'))); // For evt. statiske filer
+app.use(express.static(path.join(__dirname, 'public')));
+
+
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 app.set('view engine', 'ejs');
 
-// Server Video.js fra node_modules
 app.use('/vjs', express.static(path.join(__dirname, 'node_modules/video.js/dist')));
 
-// Server HLS-strømmer direkte
 app.use('/hls', express.static(HLS_PATH));
 
-// API: Liste over aktive strømmer
 app.get('/api/streams', (req, res) => {
     fs.readdir(HLS_PATH, (err, files) => {
         if (err) {
@@ -34,7 +90,6 @@ app.get('/api/streams', (req, res) => {
     });
 });
 
-// API: Sjekk om en strøm eksisterer
 app.get('/api/stream/:id', (req, res) => {
     const streamId = req.params.id;
     const filePath = path.join(HLS_PATH, `${streamId}.m3u8`);
@@ -44,7 +99,34 @@ app.get('/api/stream/:id', (req, res) => {
     });
 });
 
-app.get('/', (req, res) => res.render('index'));
+app.get('/', (req, res) => {
+    res.render('home');
+});
+
+app.get('/streams', (req, res) => {
+    res.render('streams');
+});
+
+app.post('/upload/video', upload.single('video'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('Ingen fil lastet opp.');
+    }
+    const ext = path.extname(req.file.originalname) || '';
+    const oldPath = req.file.path;
+    const newFilename = req.file.filename + ext;
+    const newPath = path.join(path.dirname(oldPath), newFilename);
+    fs.rename(oldPath, newPath, err => {
+        if (err) {
+            console.error('Feil ved omdøping:', err);
+            return res.status(500).send('Feil ved lagring av video.');
+        }
+        res.json({
+            filename: newFilename,
+            originalname: req.file.originalname,
+            url: `/uploads/${newFilename}`
+        });
+    });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Node kjører på port ${PORT} - Video.js er klar på /vjs`));

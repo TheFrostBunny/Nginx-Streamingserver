@@ -17,21 +17,21 @@
     </style>
 </head>
 <body>
+
     <h1>🔴 Aktive Strømmer</h1>
     <div id="stream-grid" class="grid"></div>
+
 
     <script>
         let activeStreams = [];
 
-        async function update() {
+        async function updateStreams() {
             try {
                 const res = await fetch('/api/streams');
                 const streams = await res.json();
-                
                 if (JSON.stringify(streams) !== JSON.stringify(activeStreams)) {
                     const grid = document.getElementById('stream-grid');
                     grid.innerHTML = '';
-                    
                     streams.forEach(id => {
                         const div = document.createElement('div');
                         div.className = 'card';
@@ -40,8 +40,6 @@
                             <p>Stream: ${id}</p>
                         `;
                         grid.appendChild(div);
-
-                        // Sjekk om videojs er lastet før vi bruker det
                         if (typeof videojs !== 'undefined') {
                             videojs(`v-${id}`).src({ 
                                 type: 'application/x-mpegURL', 
@@ -52,13 +50,12 @@
                     activeStreams = streams;
                 }
             } catch (e) {
-                console.error("Feil ved oppdatering:", e);
+                console.error("Feil ved oppdatering av streams:", e);
             }
         }
 
-        // Kjør oppdatering hvert 5. sekund
-        setInterval(update, 5000);
-        update();
+        setInterval(updateStreams, 5000);
+        updateStreams();
     </script>
 </body>
 </html>

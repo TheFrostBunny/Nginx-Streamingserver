@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <title>Videoarkiv</title>
+    <link href="/vjs/video-js.min.css" rel="stylesheet" />
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; padding: 20px; }
+        .container { max-width: 700px; margin: 40px auto; background: #181c20; border-radius: 8px; padding: 20px; border: 1px solid #333; }
+        h1 { margin-bottom: 20px; }
+        ul { list-style: none; padding: 0; }
+        li { margin-bottom: 10px; }
+        a { color: #4fc3f7; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Videoarkiv</h1>
+        <a href="/upload" style="background:#4fc3f7;color:#181c20;font-weight:bold;display:inline-flex;align-items:center;gap:10px;padding:12px 20px;border-radius:6px;text-decoration:none;margin-bottom:20px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#181c20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Last opp video
+        </a>
+        <% if (videos && videos.length) { %>
+            <ul>
+                <% videos.forEach(function(filename) { %>
+                    <li><a href="/video/<%= filename %>"><%= filename %></a></li>
+                <% }); %>
+            </ul>
+        <% } else { %>
+            <p>Ingen videoer funnet.</p>
+        <% } %>
+        <a href="/">Tilbake til dashboard</a>
+    </div>
+</body>
+</html>

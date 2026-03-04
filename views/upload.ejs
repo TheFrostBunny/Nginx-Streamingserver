@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <title>Last opp video</title>
+    <link href="/vjs/video-js.min.css" rel="stylesheet" />
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; padding: 40px; }
+        .container { max-width: 500px; margin: 60px auto; background: #181c20; border-radius: 8px; padding: 30px; border: 1px solid #333; }
+        h1 { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 10px; }
+        input[type="file"] { margin-bottom: 20px; }
+        button { background: #4fc3f7; color: #181c20; font-weight: bold; border: none; border-radius: 6px; padding: 12px 24px; font-size: 1em; cursor: pointer; }
+        button:hover { background: #38b6ff; }
+        .msg { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Last opp video</h1>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <label for="video">Velg videofil:</label>
+            <input type="file" name="video" id="video" accept="video/*" required />
+            <button type="submit">Last opp</button>
+        </form>
+        <div id="msg" class="msg"></div>
+        <a href="/videos" style="color:#4fc3f7;display:inline-block;margin-top:20px;">Tilbake til videoer</a>
+    </div>
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = new FormData(form);
+            const msg = document.getElementById('msg');
+            msg.textContent = 'Laster opp...';
+            const res = await fetch('/upload/video', {
+                method: 'POST',
+                body: data
+            });
+            if (res.ok) {
+                msg.textContent = 'Video lastet opp!';
+                form.reset();
+            } else {
+                msg.textContent = 'Feil ved opplasting!';
+            }
+        });
+    </script>
+</body>
+</html>
