@@ -129,4 +129,33 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+// --- HLS to MP4 conversion helper ---
+const { exec } = require('child_process');
+
+function convertHLStoMP4(streamId, callback) {
+    const hlsFile = path.join(HLS_PATH, `${streamId}.m3u8`);
+    const outputFile = path.join(__dirname, 'public', 'uploads', `${streamId}.mp4`);
+    // ffmpeg command: -y to overwrite, -loglevel error for less noise
+    const cmd = `ffmpeg -y -i "${hlsFile}" -c copy -bsf:a aac_adtstoasc "${outputFile}" -loglevel error`;
+    exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`ffmpeg error:`, error, stderr);
+            return callback(error);
+        }
+        callback(null, outputFile);
+    });
+}
+
+// API endpoint to trigger conversion manually
+app.post('/api/convert/:streamId', (req, res) => {
+    const streamId = req.params.streamId;
+    const hlsFile = path.join(HLS_PATH, `${streamId}.m3u8`);
+    fs.access(hlsFile, fs.constants.F_OK, err => {
+        if (err) return res.status(404).json({ error: 'Stream ikke funnet' });
+        convertHLStoMP4(streamId, (err, outputFile) => {
+            if (err) return res.status(500).json({ error: 'Konvertering feilet' });
+            res.json({ success: true, file: `/uploads/${streamId}.mp4` });
+        });
+    });
+});
 app.listen(PORT, () => console.log(`Node kjører på port ${PORT} - Video.js er klar på /vjs`));

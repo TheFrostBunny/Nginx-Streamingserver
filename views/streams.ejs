@@ -31,27 +31,46 @@
 
     <script>
         let activeStreams = [];
+        let videoPlayers = {};
 
         async function updateStreams() {
+
             try {
                 const res = await fetch('/api/streams');
                 const streams = await res.json();
+                // Only update the grid if streams changed
                 if (JSON.stringify(streams) !== JSON.stringify(activeStreams)) {
                     const grid = document.getElementById('stream-grid');
-                    grid.innerHTML = '';
+                    // Remove streams that are gone
+                    activeStreams.forEach(id => {
+                        if (!streams.includes(id)) {
+                            // Dispose videojs instance if exists
+                            if (videoPlayers[id]) {
+                                videoPlayers[id].dispose();
+                                delete videoPlayers[id];
+                            }
+                            const el = document.getElementById(`card-${id}`);
+                            if (el) grid.removeChild(el);
+                        }
+                    });
+                    // Add new streams
                     streams.forEach(id => {
-                        const div = document.createElement('div');
-                        div.className = 'card';
-                        div.innerHTML = `
-                            <video id="v-${id}" class="video-js vjs-16-9 vjs-default-skin" controls muted autoplay></video>
-                            <p>Stream: ${id}</p>
-                        `;
-                        grid.appendChild(div);
-                        if (typeof videojs !== 'undefined') {
-                            videojs(`v-${id}`).src({ 
-                                type: 'application/x-mpegURL', 
-                                src: `/hls/${id}.m3u8` 
-                            });
+                        if (!activeStreams.includes(id)) {
+                            const div = document.createElement('div');
+                            div.className = 'card';
+                            div.id = `card-${id}`;
+                            div.innerHTML = `
+                                <video id="v-${id}" class="video-js vjs-16-9 vjs-default-skin" controls muted autoplay></video>
+                                <p>Stream: ${id}</p>
+                            `;
+                            grid.appendChild(div);
+                            if (typeof videojs !== 'undefined') {
+                                videoPlayers[id] = videojs(`v-${id}`);
+                                videoPlayers[id].src({ 
+                                    type: 'application/x-mpegURL', 
+                                    src: `/hls/${id}.m3u8` 
+                                });
+                            }
                         }
                     });
                     activeStreams = streams;
