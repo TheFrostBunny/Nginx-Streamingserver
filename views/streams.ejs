@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <title>Live Dashboard</title>
     
-    <!-- CSS - Hentes nå fra din egen server -->
     <link href="/vjs/video-js.min.css" rel="stylesheet" />
-    
-    <!-- JS - Hentes nå fra din egen server -->
     <script src="/vjs/video.min.js"></script>
 
     <style>
@@ -38,13 +35,10 @@
             try {
                 const res = await fetch('/api/streams');
                 const streams = await res.json();
-                // Only update the grid if streams changed
                 if (JSON.stringify(streams) !== JSON.stringify(activeStreams)) {
                     const grid = document.getElementById('stream-grid');
-                    // Remove streams that are gone
                     activeStreams.forEach(id => {
                         if (!streams.includes(id)) {
-                            // Dispose videojs instance if exists
                             if (videoPlayers[id]) {
                                 videoPlayers[id].dispose();
                                 delete videoPlayers[id];
@@ -53,7 +47,6 @@
                             if (el) grid.removeChild(el);
                         }
                     });
-                    // Add new streams
                     streams.forEach(id => {
                         if (!activeStreams.includes(id)) {
                             const div = document.createElement('div');
