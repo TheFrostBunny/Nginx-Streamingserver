@@ -8,7 +8,7 @@ This project uses **PM2** for process management to ensure smooth operation, rel
 
 ---
 
-## 🚀 Starting the Server
+## Starting the Server
 
 To start the Stream Dashboard using PM2 and assign it the name `stream-dashboard`, run:
 
@@ -20,7 +20,7 @@ This allows you to manage the application easily using its assigned name.
 
 ---
 
-## 🔧 Managing the Server with PM2
+## Managing the Server with PM2
 
 Use the following commands to control the server instance:
 
@@ -40,7 +40,7 @@ This provides an overview of all active applications.
 
 ---
 
-## 🌐 Restarting Nginx
+## Restarting Nginx
 
 If you update Nginx configuration files or modify reverse proxy settings, restart Nginx with:
 
@@ -50,7 +50,7 @@ sudo systemctl restart nginx
 
 ---
 
-## 📊 Viewing Active Streams
+## Viewing Active Streams
 
 Active streams are automatically displayed in the Stream Dashboard interface.
 
@@ -62,7 +62,7 @@ pm2 list
 
 ---
 
-## 🛠 Requirements
+## Requirements
 
 * Node.js
 * PM2
@@ -71,7 +71,7 @@ pm2 list
 
 ---
 
-## 📌 Production Tips
+## Production Tips
 
 Monitor logs in real time:
 
