@@ -114,6 +114,14 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
     const oldPath = req.file.path;
     const newFilename = req.file.filename + ext;
     const newPath = path.join(path.dirname(oldPath), newFilename);
+    // Hent IP-adresse
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const logLine = `${new Date().toISOString()} | IP: ${ip} | Fil: ${newFilename}\n`;
+    fs.appendFile(path.join(__dirname, 'upload_ip_log.txt'), logLine, err => {
+        if (err) {
+            console.error('Feil ved logging av IP:', err);
+        }
+    });
     fs.rename(oldPath, newPath, err => {
         if (err) {
             console.error('Feil ved omdøping:', err);
