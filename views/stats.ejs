@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <title>Statistikk og Grafer</title>
+    <script src="/vjs/chart.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181c20;
+            color: #e0e6ed;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 650px;
+            margin: 60px auto;
+            background: #23272f;
+            border-radius: 14px;
+            box-shadow: 0 4px 24px #0008;
+            padding: 40px 32px 32px 32px;
+        }
+        h1 {
+            text-align: center;
+            color: #4fc3f7;
+            margin-bottom: 32px;
+            letter-spacing: 1px;
+        }
+        .stat {
+            font-size: 1.25em;
+            margin: 18px 0;
+            color: #e0e6ed;
+            background: #23272f;
+            border-left: 5px solid #4fc3f7;
+            padding: 10px 18px;
+            border-radius: 6px;
+            box-shadow: 0 1px 4px #0002;
+        }
+        .stat#liveUserCount {
+            background: #1a1d22;
+            color: #4fc3f7;
+            border-left: 5px solid #81d4fa;
+            font-weight: bold;
+        }
+        .desc {
+            color: #b0b8c1;
+            font-size: 1em;
+            margin-top: 28px;
+            text-align: center;
+        }
+        canvas {
+            display: block;
+            margin: 40px auto 0 auto;
+            background: #23272f;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px #0004;
+        }
+        @media (max-width: 700px) {
+            .container { padding: 18px 4vw; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Statistikk og Grafer</h1>
+        <div class="stat" id="videoCount">Laster...</div>
+        <div class="stat" id="streamCount"></div>
+        <div class="stat" id="cpuLoad"></div>
+        <div class="stat" id="ramUsage"></div>
+        <div class="stat" id="cpuTemp"></div>
+        <div class="stat" id="uptime"></div>
+        <div class="stat" id="uniqueVisitors"></div>
+        <div class="stat" id="diskUsage"></div>
+        <div class="stat" id="netUsage"></div>
+        <div class="stat" id="hostInfo"></div>
+        <div class="desc" id="desc"></div>
+        <canvas id="streamsPerDay" width="500" height="250"></canvas>
+        <canvas id="cpuChart" width="500" height="180"></canvas>
+        <canvas id="ramChart" width="500" height="180"></canvas>
+        <canvas id="visitsPerDayChart" width="500" height="180"></canvas>
+    </div>
+    <script>
+        function updateStats() {
+            fetch('/api/stats')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('videoCount').textContent = 'Antall videoer: ' + data['Antall videoer'];
+                    document.getElementById('streamCount').textContent = 'Antall streams: ' + data['Antall opplastinger'];
+                    document.getElementById('desc').textContent =
+                        'Her får du full oversikt over serverens ytelse, brukere, strømmer og opplastinger – alt oppdateres automatisk i sanntid!';
+                    document.getElementById('cpuLoad').textContent = 'CPU-bruk: ' + (data['CPU-bruk (%)'] !== null ? data['CPU-bruk (%)'] + ' %' : 'ukjent');
+                    document.getElementById('ramUsage').textContent = 'RAM: ' + (data['RAM-bruk (MB)'] !== null ? data['RAM-bruk (MB)'] + ' / ' + data['RAM totalt (MB)'] + ' MB' : 'ukjent');
+                    document.getElementById('cpuTemp').textContent = 'CPU temp: ' + (data['CPU temp (°C)'] !== null ? data['CPU temp (°C)'] + ' °C' : 'ukjent');
+                    document.getElementById('uptime').textContent = 'Oppetid: ' + (data['Oppetid (min)'] !== null ? (Math.floor(data['Oppetid (min)']/60) + ' t ' + (data['Oppetid (min)']%60) + ' min') : 'ukjent');
+                    if (data['CPU-bruk (%)'] !== null) addPoint(cpuChart, cpuData, Number(data['CPU-bruk (%)']));
+                    if (data['RAM-bruk (MB)'] !== null) addPoint(ramChart, ramData, Number(data['RAM-bruk (MB)']));
+                });
+        }
+        updateStats();
+        setInterval(updateStats, 1000);
+
+        const cpuData = { labels: [], data: [] };
+        const ramData = { labels: [], data: [] };
+        const userData = { labels: [], data: [] };
+        const maxPoints = 60; 
+
+        const cpuChart = new Chart(document.getElementById('cpuChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: cpuData.labels,
+                datasets: [{
+                    label: 'CPU-bruk (%)',
+                    data: cpuData.data,
+                    borderColor: '#4fc3f7',
+                    backgroundColor: 'rgba(33,150,243,0.15)',
+                    tension: 0.2,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                plugins: { legend: { labels: { color: '#b0b8c1' } } },
+                scales: {
+                    x: { ticks: { color: '#b0b8c1' }, grid: { color: '#23272f' } },
+                    y: { beginAtZero: true, ticks: { color: '#b0b8c1' }, grid: { color: '#23272f' } }
+                }
+            }
+        });
+        const ramChart = new Chart(document.getElementById('ramChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ramData.labels,
+                datasets: [{
+                    label: 'RAM-bruk (MB)',
+                    data: ramData.data,
+                    borderColor: '#81d4fa',
+                    backgroundColor: 'rgba(129,212,250,0.15)',
+                    tension: 0.2,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                plugins: { legend: { labels: { color: '#b0b8c1' } } },
+                scales: {
+                    x: { ticks: { color: '#b0b8c1' }, grid: { color: '#23272f' } },
+                    y: { beginAtZero: true, ticks: { color: '#b0b8c1' }, grid: { color: '#23272f' } }
+                }
+            }
+        });
+
+        function addPoint(chart, dataObj, value) {
+            const now = new Date();
+            const label = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+            dataObj.labels.push(label);
+            dataObj.data.push(value);
+            if (dataObj.labels.length > maxPoints) {
+                dataObj.labels.shift();
+                dataObj.data.shift();
+            }
+            chart.update();
+        }
+
+        let lastUserCount = 0;
+        let userChartInitialized = false;
+        function updateStats() {
+            fetch('/api/stats')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('videoCount').textContent = 'Antall videoer: ' + data['Antall videoer'];
+                    document.getElementById('streamCount').textContent = 'Antall streams: ' + data['Antall opplastinger'];
+                    document.getElementById('desc').textContent = 'Her får du full oversikt over serverens ytelse, brukere, strømmer og opplastinger – alt oppdateres automatisk i sanntid!';
+                    document.getElementById('cpuLoad').textContent = 'CPU-bruk: ' + (data['CPU-bruk (%)'] !== null ? data['CPU-bruk (%)'] + ' %' : 'ukjent');
+                    document.getElementById('ramUsage').textContent = 'RAM: ' + (data['RAM-bruk (MB)'] !== null ? data['RAM-bruk (MB)'] + ' / ' + data['RAM totalt (MB)'] + ' MB' : 'ukjent');
+                    document.getElementById('cpuTemp').textContent = 'CPU temp: ' + (data['CPU temp (°C)'] !== null ? data['CPU temp (°C)'] + ' °C' : 'ukjent');
+                    document.getElementById('uptime').textContent = 'Oppetid: ' + (data['Oppetid (min)'] !== null ? (Math.floor(data['Oppetid (min)']/60) + ' t ' + (data['Oppetid (min)']%60) + ' min') : 'ukjent');
+                    if (data['CPU-bruk (%)'] !== null) addPoint(cpuChart, cpuData, Number(data['CPU-bruk (%)']));
+                    if (data['RAM-bruk (MB)'] !== null) addPoint(ramChart, ramData, Number(data['RAM-bruk (MB)']));
+                });
+        }
+        updateStats();
+        setInterval(updateStats, 2000);
+
+        // Hent streams per dag fra logg (kun én gang ved lasting)
+        fetch('/api/streams-per-day')
+            .then(res => res.json())
+            .then(data => {
+                const ctx = document.getElementById('streamsPerDay').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Streams per dag',
+                            data: data.counts,
+                            backgroundColor: 'rgba(33, 150, 243, 0.7)',
+                            borderColor: 'rgba(33, 150, 243, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: {
+                                labels: { color: '#b0b8c1', font: { size: 16 } }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#b0b8c1', font: { size: 13 } },
+                                grid: { color: '#23272f' }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#b0b8c1', font: { size: 13 } },
+                                grid: { color: '#23272f' }
+                            }
+                        }
+                    }
+                });
+            });
+    </script>
+</body>
+</html>

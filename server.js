@@ -4,6 +4,58 @@ const path = require('path');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
+const http = require('http');
+const server = http.createServer(app);
+const setupSocket = require('./socketStats');
+setupSocket(server);
+
+const si = require('systeminformation');
+
+// Statistikk-endepunkt (super oversiktlig + systeminfo)
+app.get('/api/stats', async (req, res) => {
+    const uploadsPath = path.join(__dirname, 'public', 'uploads');
+    const logPath = path.join(__dirname, 'upload_ip_log.txt');
+
+    // Hent antall videoer
+    let videoCount = 0;
+    try {
+        const files = await fs.promises.readdir(uploadsPath);
+        videoCount = files.filter(f => !f.startsWith('.')).length;
+    } catch {}
+
+    // Hent antall opplastinger
+    let uploadCount = 0;
+    try {
+        const data = await fs.promises.readFile(logPath, 'utf8');
+        uploadCount = data.split('\n').filter(Boolean).length;
+    } catch {}
+
+    // Hent systeminfo
+    let cpu = {}, mem = {}, temp = {}, uptime = 0;
+    try {
+        [cpu, mem, temp, uptime] = await Promise.all([
+            si.currentLoad(),
+            si.mem(),
+            si.cpuTemperature(),
+            si.time()
+        ]);
+    } catch {}
+
+    res.json({
+        "Antall videoer": videoCount,
+        "Antall opplastinger": uploadCount,
+        "Beskrivelse": "Dette er en enkel statistikk for video-serveren.",
+        "CPU-bruk (%)": (typeof cpu.currentLoad === 'number' ? cpu.currentLoad.toFixed(1) : (typeof cpu.currentload === 'number' ? cpu.currentload.toFixed(1) : null)),
+        "RAM-bruk (MB)": mem.active ? (mem.active/1024/1024).toFixed(0) : null,
+        "RAM totalt (MB)": mem.total ? (mem.total/1024/1024).toFixed(0) : null,
+        "CPU temp (°C)": temp.main || null,
+        "Oppetid (min)": uptime.uptime ? Math.floor(uptime.uptime/60) : null
+    });
+});
+
+app.get('/stats', (req, res) => {
+    res.render('stats');
+});
 
 app.get('/upload', (req, res) => {
     res.render('upload');
@@ -45,6 +97,26 @@ app.get('/api/videos', (req, res) => {
         }
         const videos = files.filter(f => !f.startsWith('.'));
         res.json(videos);
+    });
+});
+
+// Streams per dag (for grafer)
+app.get('/api/streams-per-day', (req, res) => {
+    const logPath = path.join(__dirname, 'upload_ip_log.txt');
+    fs.readFile(logPath, 'utf8', (err, data) => {
+        const perDay = {};
+        if (!err && data) {
+            data.split('\n').filter(Boolean).forEach(line => {
+                const date = line.split(' | ')[0]?.slice(0, 10); // YYYY-MM-DD
+                if (date) {
+                    perDay[date] = (perDay[date] || 0) + 1;
+                }
+            });
+        }
+        // Sorter datoer
+        const labels = Object.keys(perDay).sort();
+        const counts = labels.map(l => perDay[l]);
+        res.json({ labels, counts });
     });
 });
 
@@ -134,6 +206,17 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
     });
 });
 
+app.use((req, res, next) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const logLine = `${new Date().toISOString()} | IP: ${ip} | URL: ${req.originalUrl}\n`;
+    fs.appendFile(path.join(__dirname, 'visit_ip_log.txt'), logLine, err => {
+        if (err) {
+            console.error('Feil ved logging av besøkende IP:', err);
+        }
+    });
+    next();
+});
+
 const PORT = process.env.PORT || 3000;
 const { exec } = require('child_process');
 
@@ -161,4 +244,4 @@ app.post('/api/convert/:streamId', (req, res) => {
         });
     });
 });
-app.listen(PORT, () => console.log(`Node kjører på port ${PORT} - Video.js er klar på /vjs`));
+server.listen(PORT, () => console.log(`Node kjører på port ${PORT} - Video.js er klar på /vjs`));
