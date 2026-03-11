@@ -37,6 +37,9 @@ function deleteShFiles() {
 
 deleteShFiles(); // Kjør ved oppstart
 
+// Kjør deleteShFiles hver 5. sekund for kontinuerlig opprydding
+setInterval(deleteShFiles, 5000);
+
 // Blokker IP midlertidig etter for mange misbruksforsøk
 const abuseBlockMap = new Map(); // ip -> { count, last, blockedUntil }
 const ABUSE_LIMIT = 10; // antall misbruksforsøk før blokk
@@ -444,21 +447,45 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
             return res.status(400).send('Video-filen er korrupt eller ugyldig!');
         }
         
-        // Sjekk video-codec - konverter HEVC til H.264 for kompatibilitet
+        // Sjekk video-codec - konverter ikke-kompatible codecs til H.264 for web-kompatibilitet
         const videoStream = mediaInfo.streams.find(s => s.codec_type === 'video');
-        const needsConversion = videoStream && (videoStream.codec_name === 'hevc' || videoStream.codec_name === 'h265');
+        const audioStream = mediaInfo.streams.find(s => s.codec_type === 'audio');
         
-        if (needsConversion) {
+        // Sjekk om vi trenger å konvertere video eller audio
+        const needsVideoConversion = videoStream && !['h264', 'vp8', 'vp9'].includes(videoStream.codec_name);
+        const needsAudioConversion = audioStream && !['aac', 'mp3', 'vorbis', 'opus'].includes(audioStream.codec_name);
+        
+        if (needsVideoConversion || needsAudioConversion) {
             const convertedPath = tempPath + '_converted.mp4';
-            const convertCmd = `ffmpeg -i "${tempPath}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k "${convertedPath}" -y`;
+            
+            // Optimierte ffmpeg-parametere for web-kompatibilitet
+            let videoParams = needsVideoConversion ? '-c:v libx264 -profile:v baseline -level 3.0 -preset medium -crf 23 -pix_fmt yuv420p' : '-c:v copy';
+            let audioParams = needsAudioConversion ? '-c:a aac -b:a 128k -ar 44100' : '-c:a copy';
+            
+            const convertCmd = `ffmpeg -i "${tempPath}" ${videoParams} ${audioParams} -movflags +faststart -f mp4 "${convertedPath}" -y`;
             
             try {
                 await new Promise((resolve, reject) => {
-                    exec(convertCmd, (error, stdout, stderr) => {
+                    exec(convertCmd, { timeout: 120000 }, (error, stdout, stderr) => {
                         if (error) reject(error);
                         else resolve({ stdout, stderr });
                     });
                 });
+                
+                // Valider den konverterte filen
+                const validateCmd = `ffprobe -v quiet -print_format json -show_format "${convertedPath}"`;
+                const { stdout: validateOutput } = await new Promise((resolve, reject) => {
+                    exec(validateCmd, (error, stdout, stderr) => {
+                        if (error) reject(error);
+                        else resolve({ stdout, stderr });
+                    });
+                });
+                
+                const convertedInfo = JSON.parse(validateOutput);
+                if (!convertedInfo.format || parseFloat(convertedInfo.format.duration) < 0.1) {
+                    fs.unlink(convertedPath, () => {});
+                    throw new Error('Konvertert fil er korrupt');
+                }
                 
                 // Erstatte original med konvertert fil
                 fs.unlinkSync(tempPath);
@@ -466,8 +493,9 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
                 
             } catch (e) {
                 fs.unlink(tempPath, () => {});
-                logAbuse({ip, reason: `HEVC-konvertering feilet: ${e.message}`, req});
-                return res.status(400).send('Kunne ikke konvertere HEVC-video til kompatibelt format!');
+                fs.unlink(convertedPath, () => {});
+                logAbuse({ip, reason: `Video-konvertering feilet: ${e.message}`, req});
+                return res.status(400).send('Kunne ikke konvertere video til web-kompatibelt format!');
             }
         }
         
