@@ -1,0 +1,8 @@
+{
+  "blocked_ips": [
+    "127.0.0.1",
+    "10.0.0.1"
+  ],
+  "enable_rate_limit_block": true,
+  "disable_upload_limit": true
+}

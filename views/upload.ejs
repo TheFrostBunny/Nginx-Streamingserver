@@ -27,6 +27,12 @@
         <form id="uploadForm" enctype="multipart/form-data">
             <label for="video">Velg videofil:</label>
             <input type="file" name="video" id="video" accept="video/*" required />
+            <div style="font-size:0.95em;color:#aaa;margin-bottom:10px;">
+                Kun ekte videofiler tillatt (.mp4, .webm, .ogg, .mkv, .mov, .avi, .flv, .mpeg, .3gp, .3g2).<br>
+                Filer sjekkes med ffprobe for gyldig video-innhold og varighet før lagring.<br>
+                HEVC/H.265-videoer konverteres automatisk til H.264 for kompatibilitet.<br>
+                <strong style="color:#ff6b6b;">Skript-filer (.sh, .bat, .exe, etc.) er strengt forbudt!</strong>
+            </div>
             <button type="submit">Last opp</button>
         </form>
         <div id="msg" class="msg"></div>
@@ -38,16 +44,17 @@
             const form = e.target;
             const data = new FormData(form);
             const msg = document.getElementById('msg');
-            msg.textContent = 'Laster opp...';
+            msg.textContent = 'Laster opp og verifiserer video...';
             const res = await fetch('/upload/video', {
                 method: 'POST',
                 body: data
             });
             if (res.ok) {
-                msg.textContent = 'Video lastet opp!';
+                msg.textContent = 'Video lastet opp og verifisert!';
                 form.reset();
             } else {
-                msg.textContent = 'Feil ved opplasting!';
+                const err = await res.text();
+                msg.textContent = 'Feil ved opplasting: ' + err;
             }
         });
     </script>
