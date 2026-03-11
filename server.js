@@ -198,7 +198,7 @@ app.get('/video/:filename', (req, res) => {
             return res.status(404).send('Video ikke funnet');
         }
         res.render('video', {
-            videoUrl: `/uploads/${filename}`,
+            videoUrl: `/stream/${filename}`,
             videoName: filename
         });
     });
@@ -326,9 +326,6 @@ app.use(morgan('dev'));
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
-
 app.set('view engine', 'ejs');
 
 app.use('/vjs', express.static(path.join(__dirname, 'node_modules/video.js/dist')));
@@ -363,6 +360,55 @@ app.get('/', (req, res) => {
 
 app.get('/streams', (req, res) => {
     res.render('streams');
+});
+
+// Sikker streaming-route - ingen direkte tilgang til uploads-mappen
+app.get('/stream/:filename', (req, res) => {
+    const filename = sanitize(req.params.filename);
+    if (!filename || filename !== req.params.filename) {
+        let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        if (ip && typeof ip === 'string' && ip.includes(',')) {
+            const parts = ip.split(',');
+            ip = parts[parts.length - 1].trim();
+        }
+        logAbuse({ip, reason: 'Ugyldig filnavn (path traversal/sanitizing)', req});
+        return res.status(400).send('Ugyldig filnavn.');
+    }
+    
+    const videoPath = path.join(__dirname, 'public', 'uploads', filename);
+    
+    fs.access(videoPath, fs.constants.F_OK, (err) => {
+        if (err) {
+            return res.status(404).send('Video ikke funnet');
+        }
+        
+        const stat = fs.statSync(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+        
+        if (range) {
+            const parts = range.replace(/bytes=/, '').split('-');
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+            const file = fs.createReadStream(videoPath, { start, end });
+            const head = {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': 'video/mp4',
+            };
+            res.writeHead(206, head);
+            file.pipe(res);
+        } else {
+            const head = {
+                'Content-Length': fileSize,
+                'Content-Type': 'video/mp4',
+            };
+            res.writeHead(200, head);
+            fs.createReadStream(videoPath).pipe(res);
+        }
+    });
 });
 
 app.post('/upload/video', upload.single('video'), async (req, res, next) => {
@@ -542,7 +588,7 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
         res.json({
             filename: newFilename,
             originalname: req.file.originalname,
-            url: `/uploads/${newFilename}`
+            url: `/stream/${newFilename}`
         });
     });
 });
@@ -617,7 +663,7 @@ app.post('/api/convert/:streamId', (req, res) => {
             convertHLStoMP4(streamId, (err, outputFile) => {
                 deleteShFiles(); // Slett .sh-filer etter konvertering
                 if (err) return res.status(500).json({ error: 'Konvertering feilet' });
-                res.json({ success: true, file: `/uploads/${streamId}.mp4` });
+                res.json({ success: true, file: `/stream/${streamId}.mp4` });
             });
         });
     });
