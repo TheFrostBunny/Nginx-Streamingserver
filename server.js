@@ -10,6 +10,17 @@ const setupSocket = require('./socketStats');
 setupSocket(server);
 
 const si = require('systeminformation');
+const rateLimit = require('express-rate-limit');
+// Egen rate limiter for stream-konvertering (strengere)
+const streamLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutter
+    max: 10, // max 10 konverteringer per IP per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'For mange konverteringer, prøv igjen senere.'
+});
+const helmet = require('helmet');
+const sanitize = require('sanitize-filename');
 
 // Statistikk-endepunkt (super oversiktlig + systeminfo)
 app.get('/api/stats', async (req, res) => {
@@ -128,6 +139,14 @@ const upload = multer({
         if (file.mimetype && file.mimetype.startsWith('video/')) {
             cb(null, true);
         } else {
+            // Logg misbruk: feil filtype
+            let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+            if (ip && typeof ip === 'string' && ip.includes(',')) {
+                const parts = ip.split(',');
+                ip = parts[parts.length - 1].trim();
+            }
+            const abuseLog = `${new Date().toISOString()} | IP: ${ip} | Misbruk: Feil filtype (${file.mimetype})\n`;
+            fs.appendFile(path.join(__dirname, 'abuse_log.txt'), abuseLog, () => {});
             cb(new Error('Kun video-filer er tillatt!'), false);
         }
     }
@@ -162,7 +181,8 @@ app.get('/api/streams', (req, res) => {
 });
 
 app.get('/api/stream/:id', (req, res) => {
-    const streamId = req.params.id;
+    // Sanitér streamId
+    const streamId = sanitize(req.params.id);
     const filePath = path.join(HLS_PATH, `${streamId}.m3u8`);
     fs.access(filePath, fs.constants.F_OK, err => {
         if (err) return res.status(404).json({ exists: false });
@@ -180,15 +200,28 @@ app.get('/streams', (req, res) => {
 
 app.post('/upload/video', upload.single('video'), (req, res) => {
     if (!req.file) {
+        // Logg misbruk: ingen fil lastet opp
+        let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        if (ip && typeof ip === 'string' && ip.includes(',')) {
+            const parts = ip.split(',');
+            ip = parts[parts.length - 1].trim();
+        }
+        const abuseLog = `${new Date().toISOString()} | IP: ${ip} | Misbruk: Ingen fil lastet opp\n`;
+        fs.appendFile(path.join(__dirname, 'abuse_log.txt'), abuseLog, () => {});
         return res.status(400).send('Ingen fil lastet opp.');
     }
-    const ext = path.extname(req.file.originalname) || '';
+    // Sanitér originalt filnavn
+    const safeOriginal = sanitize(req.file.originalname);
+    const ext = path.extname(safeOriginal) || '';
     const oldPath = req.file.path;
     const newFilename = req.file.filename + ext;
     const newPath = path.join(path.dirname(oldPath), newFilename);
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    if (ip && typeof ip === 'string' && ip.includes(',')) {
+        const parts = ip.split(',');
+        ip = parts[parts.length - 1].trim();
+    }
     const logPath = path.join(__dirname, 'upload_ip_log.txt');
-    // Sjekk antall opplastinger for denne IP
     fs.readFile(logPath, 'utf8', (err, data) => {
         let count = 0;
         if (!err && data) {
@@ -196,8 +229,10 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
             count = lines.filter(line => line.includes(`IP: ${ip}`)).length;
         }
         if (count >= 10) {
-            // Slett opplastet fil hvis over limit
             fs.unlink(oldPath, () => {});
+            // Logg misbruk: for mange uploads
+            const abuseLog = `${new Date().toISOString()} | IP: ${ip} | Misbruk: For mange videoopplastinger\n`;
+            fs.appendFile(path.join(__dirname, 'abuse_log.txt'), abuseLog, () => {});
             return res.status(429).send('Du har nådd maks 10 videoopplastinger.');
         }
         const logLine = `${new Date().toISOString()} | IP: ${ip} | Fil: ${newFilename}\n`;
@@ -221,7 +256,11 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
 });
 
 app.use((req, res, next) => {
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    if (ip && typeof ip === 'string' && ip.includes(',')) {
+        const parts = ip.split(',');
+        ip = parts[parts.length - 1].trim();
+    }
     const logLine = `${new Date().toISOString()} | IP: ${ip} | URL: ${req.originalUrl}\n`;
     fs.appendFile(path.join(__dirname, 'visit_ip_log.txt'), logLine, err => {
         if (err) {
@@ -248,14 +287,28 @@ function convertHLStoMP4(streamId, callback) {
 }
 
 app.post('/api/convert/:streamId', (req, res) => {
-    const streamId = req.params.streamId;
-    const hlsFile = path.join(HLS_PATH, `${streamId}.m3u8`);
-    fs.access(hlsFile, fs.constants.F_OK, err => {
-        if (err) return res.status(404).json({ error: 'Stream ikke funnet' });
-        convertHLStoMP4(streamId, (err, outputFile) => {
-            if (err) return res.status(500).json({ error: 'Konvertering feilet' });
-            res.json({ success: true, file: `/uploads/${streamId}.mp4` });
+    streamLimiter(req, res, () => {
+        const streamId = sanitize(req.params.streamId);
+        const hlsFile = path.join(HLS_PATH, `${streamId}.m3u8`);
+        fs.access(hlsFile, fs.constants.F_OK, err => {
+            if (err) return res.status(404).json({ error: 'Stream ikke funnet' });
+            convertHLStoMP4(streamId, (err, outputFile) => {
+                if (err) return res.status(500).json({ error: 'Konvertering feilet' });
+                res.json({ success: true, file: `/uploads/${streamId}.mp4` });
+            });
         });
     });
 });
+
+app.use(helmet());
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'For mange forespørsler, prøv igjen senere.'
+});
+app.use(limiter);
+
 server.listen(PORT, () => console.log(`Node kjører på port ${PORT} - Video.js er klar på /vjs`));

@@ -1,6 +1,7 @@
 /node_modules
 public/uploads/*
 upload_ip_log.txt
+abuse_log.txt
 funny_eyes.py
 .venv
 visit_ip_log.txt
