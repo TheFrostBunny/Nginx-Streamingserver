@@ -4,5 +4,6 @@
     "10.0.0.1"
   ],
   "enable_rate_limit_block": true,
-  "disable_upload_limit": true
+  "disable_upload_limit": false,
+  "upload_limit": 10
 }

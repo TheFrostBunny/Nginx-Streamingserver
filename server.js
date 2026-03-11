@@ -46,7 +46,7 @@ const abuseBlockMap = new Map();
 const ABUSE_LIMIT = 10;
 const ABUSE_BLOCK_MINUTES = 30;
 
-let ENABLE_RATE_LIMIT_BLOCK = false;
+let ENABLE_RATE_LIMIT_BLOCK = true;
 
 function isBlocked(ip) {
     const entry = abuseBlockMap.get(ip);
