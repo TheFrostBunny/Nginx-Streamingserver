@@ -39,15 +39,12 @@ function deleteShFiles() {
     });
 }
 
-deleteShFiles(); // Kjør ved oppstart
-
-// Kjør deleteShFiles hver 5. sekund for kontinuerlig opprydding
+deleteShFiles();
 setInterval(deleteShFiles, 5000);
 
-// Blokker IP midlertidig etter for mange misbruksforsøk
-const abuseBlockMap = new Map(); // ip -> { count, last, blockedUntil }
-const ABUSE_LIMIT = 10; // antall misbruksforsøk før blokk
-const ABUSE_BLOCK_MINUTES = 30; // hvor lenge blokk varer
+const abuseBlockMap = new Map();
+const ABUSE_LIMIT = 10;
+const ABUSE_BLOCK_MINUTES = 30;
 
 let ENABLE_RATE_LIMIT_BLOCK = false;
 
@@ -67,14 +64,12 @@ function registerAbuse(ip) {
     entry.last = now;
     if (entry.count >= ABUSE_LIMIT) {
         entry.blockedUntil = now + ABUSE_BLOCK_MINUTES * 60 * 1000;
-        entry.count = 0; // reset count after block
+        entry.count = 0;
     }
     abuseBlockMap.set(ip, entry);
 }
 
-// Felles funksjon for misbrukslogging
 function logAbuse({ip, reason, req}) {
-    // Første sjekk: blokkert IP?
     if (typeof abuseConfig !== 'undefined' && abuseConfig.blocked_ips && abuseConfig.blocked_ips.includes(ip)) {
         const reasonMsg = reason ? reason + ' (statisk blokkert IP)' : 'Statisk blokkert IP';
         const blocked = 'true';
@@ -85,7 +80,6 @@ function logAbuse({ip, reason, req}) {
         }
         return;
     }
-    // Rate limit blokkering kan slås av med config
     if (ENABLE_RATE_LIMIT_BLOCK && isBlocked(ip)) {
         logAbuse({ip, reason: 'Forsøk fra blokkert IP', req});
         if (req && req.res) {
@@ -93,16 +87,13 @@ function logAbuse({ip, reason, req}) {
         }
         return;
     }
-    // Registrer misbruk
     registerAbuse(ip);
-    // Sikre at status alltid er definert
     let status = '-';
     try {
         if (req && req.res && typeof req.res.statusCode !== 'undefined') {
             status = req.res.statusCode;
         }
     } catch {}
-    // IP-klasse må settes her hvis ikke allerede satt
     let ipClass = '-';
     if (ip && typeof ip === 'string') {
         if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.') || ip.startsWith('172.19.') || ip.startsWith('172.20.') || ip.startsWith('172.21.') || ip.startsWith('172.22.') || ip.startsWith('172.23.') || ip.startsWith('172.24.') || ip.startsWith('172.25.') || ip.startsWith('172.26.') || ip.startsWith('172.27.') || ip.startsWith('172.28.') || ip.startsWith('172.29.') || ip.startsWith('172.30.') || ip.startsWith('172.31.')) {
@@ -120,7 +111,6 @@ function logAbuse({ip, reason, req}) {
     const body = req && req.body ? JSON.stringify(req.body).slice(0, 500) : '-';
     const query = req && req.query ? JSON.stringify(req.query).slice(0, 500) : '-';
     const cookies = req && req.headers['cookie'] ? req.headers['cookie'] : '-';
-    // Prøv å hente ut mer info om enheten fra user-agent
     let deviceType = '-';
     let os = '-';
     let browser = '-';
@@ -144,8 +134,6 @@ function logAbuse({ip, reason, req}) {
     const abuseLog = `${new Date().toISOString()} | IP: ${ip} (${ipClass}) | Status: ${status} | Method: ${method} | Endpoint: ${endpoint} | UA: ${userAgent} | Device: ${deviceType} | OS: ${os} | Browser: ${browser} | Referer: ${referer} | Cookies: ${cookies} | Query: ${query} | Body: ${body} | Misbruk: ${reason}\n`;
     fs.appendFile(path.join(__dirname, 'abuse_log.txt'), abuseLog, () => {});
 }
-
-// Sjekk også config-fil for blokkert IP
     if (typeof abuseConfig !== 'undefined' && abuseConfig.blocked_ips && abuseConfig.blocked_ips.includes(ip)) {
         const reasonMsg = reason ? reason + ' (statisk blokkert IP)' : 'Statisk blokkert IP';
         const blocked = 'true';
@@ -157,26 +145,22 @@ function logAbuse({ip, reason, req}) {
         return;
     }
 
-// Statistikk-endepunkt (super oversiktlig + systeminfo)
 app.get('/api/stats', async (req, res) => {
     const uploadsPath = path.join(__dirname, 'public', 'uploads');
     const logPath = path.join(__dirname, 'upload_ip_log.txt');
 
-    // Hent antall videoer
     let videoCount = 0;
     try {
         const files = await fs.promises.readdir(uploadsPath);
         videoCount = files.filter(f => !f.startsWith('.')).length;
     } catch {}
 
-    // Hent antall opplastinger
     let uploadCount = 0;
     try {
         const data = await fs.promises.readFile(logPath, 'utf8');
         uploadCount = data.split('\n').filter(Boolean).length;
     } catch {}
 
-    // Hent systeminfo
     let cpu = {}, mem = {}, temp = {}, uptime = 0;
     try {
         [cpu, mem, temp, uptime] = await Promise.all([
@@ -245,7 +229,6 @@ app.get('/api/videos', (req, res) => {
     });
 });
 
-// Streams per dag (for grafer)
 app.get('/api/streams-per-day', (req, res) => {
     const logPath = path.join(__dirname, 'upload_ip_log.txt');
     fs.readFile(logPath, 'utf8', (err, data) => {
@@ -258,14 +241,12 @@ app.get('/api/streams-per-day', (req, res) => {
                 }
             });
         }
-        // Sorter datoer
         const labels = Object.keys(perDay).sort();
         const counts = labels.map(l => perDay[l]);
         res.json({ labels, counts });
     });
 });
 
-// Sett opp temp-mappe for opplasting
 const TEMP_UPLOADS = path.join(__dirname, 'public', 'temp_uploads');
 if (!fs.existsSync(TEMP_UPLOADS)) {
     fs.mkdirSync(TEMP_UPLOADS, { recursive: true });
@@ -275,15 +256,14 @@ const upload = multer({
     dest: TEMP_UPLOADS,
     limits: { fileSize: 200 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-        // Kun tillatte video-filtyper (utvid gjerne listen)
         const allowedTypes = [
             'video/mp4',
             'video/webm',
             'video/ogg',
-            'video/x-matroska', // mkv
-            'video/quicktime',  // mov
-            'video/x-msvideo',  // avi
-            'video/x-flv',      // flv
+            'video/x-matroska',
+            'video/quicktime',
+            'video/x-msvideo',
+            'video/x-flv',
             'video/mpeg',
             'video/3gpp',
             'video/3gpp2'
@@ -296,27 +276,23 @@ const upload = multer({
                 const parts = ip.split(',');
                 ip = parts[parts.length - 1].trim();
             }
-            // Ekstra: blokker .txt, .sh og ikke-video også etter opplasting, og slett filen umiddelbart hvis den sniker seg gjennom
+        
             const ext = path.extname(file.originalname).toLowerCase();
             const forbiddenExts = ['.txt', '.md', '.csv', '.json', '.xml', '.sh', '.bat', '.exe', '.com', '.scr', '.pif', '.cmd', '.vbs', '.js', '.jar', '.php', '.py', '.pl', '.rb'];
             if (!allowedTypes.includes(file.mimetype) || forbiddenExts.includes(ext)) {
                 logAbuse({ip, reason: `Blokkert fil: mimetype=${file.mimetype}, ext=${ext}`, req});
-                // Slett filen hvis den har blitt lagret
                 if (file.path) {
                     fs.unlink(file.path, () => {});
                 }
                 return cb(new Error('Denne filtypen er ikke tillatt!'), false);
             }
-            // Ekstra: Sjekk faktisk mp4-format etter opplasting
             if (allowedTypes.includes('video/mp4') && ext === '.mp4') {
                 const filePath = file.path;
-                // Les de første byte for å sjekke mp4-signatur
                 try {
                     const fd = fs.openSync(filePath, 'r');
                     const buffer = Buffer.alloc(12);
                     fs.readSync(fd, buffer, 0, 12, 0);
                     fs.closeSync(fd);
-                    // MP4-filer starter ofte med ftyp
                     if (!buffer.includes(Buffer.from('ftyp'))) {
                         let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
                         if (ip && typeof ip === 'string' && ip.includes(',')) {
@@ -328,7 +304,6 @@ const upload = multer({
                         return cb(new Error('Filen er ikke et gyldig mp4-format!'), false);
                     }
                 } catch (e) {
-                    // Hvis det ikke går å lese filen, slett og blokker
                     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
                     if (ip && typeof ip === 'string' && ip.includes(',')) {
                         const parts = ip.split(',');
@@ -374,7 +349,6 @@ app.get('/api/streams', (req, res) => {
 });
 
 app.get('/api/stream/:id', (req, res) => {
-    // Sanitér streamId
     const streamId = sanitize(req.params.id);
     const filePath = path.join(HLS_PATH, `${streamId}.m3u8`);
     fs.access(filePath, fs.constants.F_OK, err => {
@@ -402,7 +376,6 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
         logAbuse({ip, reason: 'Ingen fil lastet opp', req});
         return res.status(400).send('Ingen fil lastet opp.');
     }
-    // Sjekk filtype og innhold i temp-mappen
     const tempPath = req.file.path;
     const safeOriginal = sanitize(req.file.originalname);
     const ext = path.extname(safeOriginal) || '';
@@ -416,13 +389,11 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
     const allowedTypes = [
         '.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi', '.flv', '.mpeg', '.3gp', '.3g2'
     ];
-    // Sjekk extension først
     if (!allowedTypes.includes(ext.toLowerCase())) {
         fs.unlink(tempPath, () => {});
         logAbuse({ip, reason: `Ugyldig filtype: ${ext}`, req});
         return res.status(400).send('Kun video-filer er tillatt!');
     }
-    // Bruk ffprobe for å verifisere at filen faktisk er en gyldig video
     const { exec } = require('child_process');
     const ffprobeCmd = `ffprobe -v quiet -print_format json -show_format -show_streams "${tempPath}"`;
     
@@ -430,7 +401,6 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
         const { stdout } = await new Promise((resolve, reject) => {
             exec(ffprobeCmd, { timeout: 30000 }, (error, stdout, stderr) => {
                 if (error) {
-                    // Mer detaljert feilhåndtering
                     let errorReason = 'Ukjent ffprobe-feil';
                     if (error.message.includes('Invalid data found')) {
                         errorReason = 'Ikke en gyldig mediefil';
@@ -455,40 +425,32 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
             return res.status(400).send('Filen er ikke en gyldig video!');
         }
         
-        // Sjekk om videoen har gyldig varighet (ikke korrupt)
         const duration = parseFloat(mediaInfo.format.duration);
         if (!duration || duration < 0.1) {
             fs.unlink(tempPath, () => {});
             logAbuse({ip, reason: 'Video har ugyldig varighet', req});
             return res.status(400).send('Video-filen er korrupt eller ugyldig!');
         }
-        
-        // Ekstra sikkerhetssjekker
         const videoStream = mediaInfo.streams.find(s => s.codec_type === 'video');
         const fileSize = fs.statSync(tempPath).size;
-        
-        // Sjekk filstørrelse (maks 500MB)
         if (fileSize > 500 * 1024 * 1024) {
             fs.unlink(tempPath, () => {});
             logAbuse({ip, reason: `Fil for stor: ${(fileSize/1024/1024).toFixed(1)}MB`, req});
             return res.status(400).send('Video-fil kan ikke være større enn 500MB!');
         }
         
-        // Sjekk varighet (maks 30 minutter)
         if (duration > 1800) {
             fs.unlink(tempPath, () => {});
             logAbuse({ip, reason: `Video for lang: ${(duration/60).toFixed(1)} minutter`, req});
             return res.status(400).send('Video kan ikke være lenger enn 30 minutter!');
         }
         
-        // Sjekk oppløsning (maks 4K)
         if (videoStream && (videoStream.width > 3840 || videoStream.height > 2160)) {
             fs.unlink(tempPath, () => {});
             logAbuse({ip, reason: `Oppløsning for høy: ${videoStream.width}x${videoStream.height}`, req});
             return res.status(400).send('Video-oppløsning kan ikke være høyere enn 4K!');
         }
         
-        // Sjekk for mistenkelige metadata/tags
         const format = mediaInfo.format;
         if (format.tags) {
             const suspiciousKeys = ['script', 'javascript', 'exec', 'command', 'shell'];
@@ -502,15 +464,13 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
             }
         }
         
-        // Sjekk bitrate (unormalt høy kan indikere problemer)
         const bitrate = parseInt(format.bit_rate);
-        if (bitrate > 50000000) { // 50 Mbps
+        if (bitrate > 50000000) {
             fs.unlink(tempPath, () => {});
             logAbuse({ip, reason: `Bitrate for høy: ${(bitrate/1000000).toFixed(1)}Mbps`, req});
             return res.status(400).send('Video-bitrate er unormalt høy!');
         }
         
-        // Sjekk for farlige codec-kombinasjoner
         const codecName = videoStream?.codec_name;
         const dangerousCodecs = ['rawvideo', 'zmbv', 'bintext'];
         if (codecName && dangerousCodecs.includes(codecName)) {
@@ -519,17 +479,14 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
             return res.status(400).send('Video-codec er ikke tillatt av sikkerhetshensyn!');
         }
         
-        // Sjekk video-codec - konverter ikke-kompatible codecs til H.264 for web-kompatibilitet
         const audioStream = mediaInfo.streams.find(s => s.codec_type === 'audio');
         
-        // Sjekk om vi trenger å konvertere video eller audio
         const needsVideoConversion = videoStream && !['h264', 'vp8', 'vp9'].includes(videoStream.codec_name);
         const needsAudioConversion = audioStream && !['aac', 'mp3', 'vorbis', 'opus'].includes(audioStream.codec_name);
         
         if (needsVideoConversion || needsAudioConversion) {
             const convertedPath = tempPath + '_converted.mp4';
             
-            // Optimierte ffmpeg-parametere for web-kompatibilitet
             let videoParams = needsVideoConversion ? '-c:v libx264 -profile:v baseline -level 3.0 -preset medium -crf 23 -pix_fmt yuv420p' : '-c:v copy';
             let audioParams = needsAudioConversion ? '-c:a aac -b:a 128k -ar 44100' : '-c:a copy';
             
@@ -543,7 +500,6 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
                     });
                 });
                 
-                // Valider den konverterte filen
                 const validateCmd = `ffprobe -v quiet -print_format json -show_format "${convertedPath}"`;
                 const { stdout: validateOutput } = await new Promise((resolve, reject) => {
                     exec(validateCmd, (error, stdout, stderr) => {
@@ -558,7 +514,6 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
                     throw new Error('Konvertert fil er korrupt');
                 }
                 
-                // Erstatte original med konvertert fil
                 fs.unlinkSync(tempPath);
                 fs.renameSync(convertedPath, tempPath);
                 
@@ -575,7 +530,7 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
         logAbuse({ip, reason: `ffprobe-feil: ${e.message}`, req});
         return res.status(400).send('Kunne ikke verifisere video-fil!');
     }
-    // Flytt filen til uploads hvis OK
+
     const uploadsPath = path.join(__dirname, 'public', 'uploads');
     const newFilename = req.file.filename + ext;
     const newPath = path.join(uploadsPath, newFilename);
@@ -607,7 +562,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Logg misbruk ved global rate limit
 app.use((err, req, res, next) => {
     if (err && err.status === 429) {
         let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
