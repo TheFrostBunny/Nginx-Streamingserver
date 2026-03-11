@@ -187,21 +187,35 @@ app.post('/upload/video', upload.single('video'), (req, res) => {
     const newFilename = req.file.filename + ext;
     const newPath = path.join(path.dirname(oldPath), newFilename);
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const logLine = `${new Date().toISOString()} | IP: ${ip} | Fil: ${newFilename}\n`;
-    fs.appendFile(path.join(__dirname, 'upload_ip_log.txt'), logLine, err => {
-        if (err) {
-            console.error('Feil ved logging av IP:', err);
+    const logPath = path.join(__dirname, 'upload_ip_log.txt');
+    // Sjekk antall opplastinger for denne IP
+    fs.readFile(logPath, 'utf8', (err, data) => {
+        let count = 0;
+        if (!err && data) {
+            const lines = data.split('\n').filter(Boolean);
+            count = lines.filter(line => line.includes(`IP: ${ip}`)).length;
         }
-    });
-    fs.rename(oldPath, newPath, err => {
-        if (err) {
-            console.error('Feil ved omdøping:', err);
-            return res.status(500).send('Feil ved lagring av video.');
+        if (count >= 10) {
+            // Slett opplastet fil hvis over limit
+            fs.unlink(oldPath, () => {});
+            return res.status(429).send('Du har nådd maks 10 videoopplastinger.');
         }
-        res.json({
-            filename: newFilename,
-            originalname: req.file.originalname,
-            url: `/uploads/${newFilename}`
+        const logLine = `${new Date().toISOString()} | IP: ${ip} | Fil: ${newFilename}\n`;
+        fs.appendFile(logPath, logLine, err => {
+            if (err) {
+                console.error('Feil ved logging av IP:', err);
+            }
+        });
+        fs.rename(oldPath, newPath, err => {
+            if (err) {
+                console.error('Feil ved omdøping:', err);
+                return res.status(500).send('Feil ved lagring av video.');
+            }
+            res.json({
+                filename: newFilename,
+                originalname: req.file.originalname,
+                url: `/uploads/${newFilename}`
+            });
         });
     });
 });
