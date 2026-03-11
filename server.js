@@ -661,7 +661,7 @@ app.post('/api/convert/:streamId', (req, res) => {
         fs.access(hlsFile, fs.constants.F_OK, err => {
             if (err) return res.status(404).json({ error: 'Stream ikke funnet' });
             convertHLStoMP4(streamId, (err, outputFile) => {
-                deleteShFiles(); // Slett .sh-filer etter konvertering
+                deleteShFiles();
                 if (err) return res.status(500).json({ error: 'Konvertering feilet' });
                 res.json({ success: true, file: `/stream/${streamId}.mp4` });
             });
