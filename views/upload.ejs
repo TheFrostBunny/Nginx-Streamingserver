@@ -28,9 +28,13 @@
             <label for="video">Velg videofil:</label>
             <input type="file" name="video" id="video" accept="video/*" required />
             <div style="font-size:0.95em;color:#aaa;margin-bottom:10px;">
-                Kun ekte videofiler tillatt (.mp4, .webm, .ogg, .mkv, .mov, .avi, .flv, .mpeg, .3gp, .3g2).<br>
-                Filer sjekkes med ffprobe for gyldig video-innhold og varighet før lagring.<br>
-                Ikke-kompatible codecs konverteres automatisk til web-kompatibel H.264/AAC.<br>
+                <strong>Videokrav:</strong><br>
+                • Kun ekte videofiler tillatt (.mp4, .webm, .ogg, .mkv, .mov, .avi, .flv, .mpeg, .3gp, .3g2)<br>
+                • Maksimal filstørrelse: 500MB<br>
+                • Maksimal varighet: 30 minutter<br>
+                • Maksimal oppløsning: 4K (3840x2160)<br>
+                • Sikre codecs og metadata kreves<br>
+                • Ikke-kompatible codecs konverteres automatisk til web-kompatibel H.264/AAC<br>
                 <strong style="color:#ff6b6b;">Skript-filer (.sh, .bat, .exe, etc.) er strengt forbudt!</strong>
             </div>
             <button type="submit">Last opp</button>

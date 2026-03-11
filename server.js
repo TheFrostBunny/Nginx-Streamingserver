@@ -4,6 +4,10 @@ const path = require('path');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
+
+// Trust proxy for reverse proxy setup (nginx)
+app.set('trust proxy', 1);
+
 const http = require('http');
 const server = http.createServer(app);
 const setupSocket = require('./socketStats');
@@ -424,9 +428,21 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
     
     try {
         const { stdout } = await new Promise((resolve, reject) => {
-            exec(ffprobeCmd, (error, stdout, stderr) => {
-                if (error) reject(error);
-                else resolve({ stdout, stderr });
+            exec(ffprobeCmd, { timeout: 30000 }, (error, stdout, stderr) => {
+                if (error) {
+                    // Mer detaljert feilhåndtering
+                    let errorReason = 'Ukjent ffprobe-feil';
+                    if (error.message.includes('Invalid data found')) {
+                        errorReason = 'Ikke en gyldig mediefil';
+                    } else if (error.message.includes('No such file')) {
+                        errorReason = 'Fil ikke funnet';
+                    } else if (error.signal === 'SIGTERM') {
+                        errorReason = 'ffprobe timeout - fil for stor eller korrupt';
+                    }
+                    reject(new Error(errorReason));
+                } else {
+                    resolve({ stdout, stderr });
+                }
             });
         });
         
@@ -447,8 +463,63 @@ app.post('/upload/video', upload.single('video'), async (req, res, next) => {
             return res.status(400).send('Video-filen er korrupt eller ugyldig!');
         }
         
-        // Sjekk video-codec - konverter ikke-kompatible codecs til H.264 for web-kompatibilitet
+        // Ekstra sikkerhetssjekker
         const videoStream = mediaInfo.streams.find(s => s.codec_type === 'video');
+        const fileSize = fs.statSync(tempPath).size;
+        
+        // Sjekk filstørrelse (maks 500MB)
+        if (fileSize > 500 * 1024 * 1024) {
+            fs.unlink(tempPath, () => {});
+            logAbuse({ip, reason: `Fil for stor: ${(fileSize/1024/1024).toFixed(1)}MB`, req});
+            return res.status(400).send('Video-fil kan ikke være større enn 500MB!');
+        }
+        
+        // Sjekk varighet (maks 30 minutter)
+        if (duration > 1800) {
+            fs.unlink(tempPath, () => {});
+            logAbuse({ip, reason: `Video for lang: ${(duration/60).toFixed(1)} minutter`, req});
+            return res.status(400).send('Video kan ikke være lenger enn 30 minutter!');
+        }
+        
+        // Sjekk oppløsning (maks 4K)
+        if (videoStream && (videoStream.width > 3840 || videoStream.height > 2160)) {
+            fs.unlink(tempPath, () => {});
+            logAbuse({ip, reason: `Oppløsning for høy: ${videoStream.width}x${videoStream.height}`, req});
+            return res.status(400).send('Video-oppløsning kan ikke være høyere enn 4K!');
+        }
+        
+        // Sjekk for mistenkelige metadata/tags
+        const format = mediaInfo.format;
+        if (format.tags) {
+            const suspiciousKeys = ['script', 'javascript', 'exec', 'command', 'shell'];
+            const tagString = JSON.stringify(format.tags).toLowerCase();
+            const hasSuspiciousTags = suspiciousKeys.some(key => tagString.includes(key));
+            
+            if (hasSuspiciousTags) {
+                fs.unlink(tempPath, () => {});
+                logAbuse({ip, reason: 'Mistenkelige metadata i video', req});
+                return res.status(400).send('Video inneholder mistenkelige metadata!');
+            }
+        }
+        
+        // Sjekk bitrate (unormalt høy kan indikere problemer)
+        const bitrate = parseInt(format.bit_rate);
+        if (bitrate > 50000000) { // 50 Mbps
+            fs.unlink(tempPath, () => {});
+            logAbuse({ip, reason: `Bitrate for høy: ${(bitrate/1000000).toFixed(1)}Mbps`, req});
+            return res.status(400).send('Video-bitrate er unormalt høy!');
+        }
+        
+        // Sjekk for farlige codec-kombinasjoner
+        const codecName = videoStream?.codec_name;
+        const dangerousCodecs = ['rawvideo', 'zmbv', 'bintext'];
+        if (codecName && dangerousCodecs.includes(codecName)) {
+            fs.unlink(tempPath, () => {});
+            logAbuse({ip, reason: `Farlig codec: ${codecName}`, req});
+            return res.status(400).send('Video-codec er ikke tillatt av sikkerhetshensyn!');
+        }
+        
+        // Sjekk video-codec - konverter ikke-kompatible codecs til H.264 for web-kompatibilitet
         const audioStream = mediaInfo.streams.find(s => s.codec_type === 'audio');
         
         // Sjekk om vi trenger å konvertere video eller audio
